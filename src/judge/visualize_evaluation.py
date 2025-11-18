@@ -195,56 +195,95 @@ def export_to_markdown(scored_rubrics: List[Dict], output_file: str):
     
     print(f"Results exported to {output_file}")
 
-def main():
-    args = parse_args()
+def visualize_results(
+    results_file: str | None = None,
+    repo_name: str | None = None,
+    reference: str | None = None,
+    output_format: str = "summary",
+    min_score: float = 0.0,
+    max_score: float = 1.0,
+):
+    """Render evaluation results to stdout/files."""
+    if not results_file:
+        if not repo_name:
+            print("Error: Either --results-file or --repo-name must be provided")
+            return None
+        if not reference:
+            print("Reference docs not specified, attempting to auto-detect...")
+            preferred = ["codewiki", "deepwiki", "original"]
+            detected_reference = None
+            data_dir = Path(config.get_data_path(repo_name))
+            for candidate in preferred:
+                docs_tree = data_dir / candidate / "docs_tree.json"
+                if docs_tree.exists():
+                    detected_reference = candidate
+                    print(f"Detected reference docs: {candidate}")
+                    break
+            if not detected_reference:
+                candidates = [d for d in data_dir.iterdir() if d.is_dir() and (d / "docs_tree.json").exists()]
+                if candidates:
+                    detected_reference = candidates[0].name
+                    print(f"Using first available reference docs: {detected_reference}")
+            reference = detected_reference
 
-    results_file = args.results_file or config.get_data_path(args.repo_name, args.reference, "evaluation_results", "combined_evaluation_results.json")
-    
-    # If combined file doesn't exist, look for individual model results
-    if not os.path.exists(results_file):
-        eval_results_dir = config.get_data_path(args.repo_name, args.reference, "evaluation_results")
-        individual_files = [f for f in os.listdir(eval_results_dir) if f.endswith('.json') and not f.startswith('combined')]
-        
-        if len(individual_files) == 1:
-            results_file = os.path.join(eval_results_dir, individual_files[0])
-            print(f"Combined results not found, using individual results: {individual_files[0]}")
-        elif len(individual_files) > 1:
-            print(f"Multiple individual result files found: {individual_files}")
-            print("Please specify --results-file or run combination step first")
-            return
-        else:
-            print(f"No evaluation result files found in {eval_results_dir}")
-            return
-    
-    # Load evaluation results
-    with open(results_file, 'r') as f:
+        if not reference:
+            print("Unable to locate reference docs automatically.")
+            return None
+
+        default_path = Path(config.get_data_path(repo_name, reference, "evaluation_results"))
+        results_file = os.path.join(default_path, "combined_evaluation_results.json")
+        if not os.path.exists(results_file):
+            individual_files = [
+                f for f in os.listdir(default_path) if f.endswith(".json") and not f.startswith("combined")
+            ]
+            if len(individual_files) == 1:
+                results_file = os.path.join(default_path, individual_files[0])
+                print(f"Combined results not found, using individual results: {individual_files[0]}")
+            elif len(individual_files) > 1:
+                print(f"Multiple individual result files found: {individual_files}")
+                print("Please specify --results-file or run combination step first")
+                return None
+            else:
+                print(f"No evaluation result files found in {default_path}")
+                return None
+
+    with open(results_file, "r") as f:
         data = json.load(f)
-    
-    # Handle different JSON structures
+
     if isinstance(data, dict) and "rubrics" in data:
-        # Combined results with metadata
         scored_rubrics = data["rubrics"]
-        combination_metadata = data.get("combination_metadata", {})
-        print(f"Using combined results from {combination_metadata.get('num_evaluations_combined', 'unknown')} evaluations")
-        print(f"Combination method: {combination_metadata.get('combination_method', 'unknown')}")
+        metadata = data.get("combination_metadata", {})
+        print(f"Using combined results from {metadata.get('num_evaluations_combined', 'unknown')} evaluations")
+        print(f"Combination method: {metadata.get('combination_method', 'unknown')}")
         print()
     elif isinstance(data, list):
-        # Direct list of rubrics
         scored_rubrics = data
     else:
         print(f"Error: Unexpected JSON structure in {results_file}")
-        return
-    
-    if args.format == "summary":
+        return None
+
+    if output_format == "summary":
         print_summary(scored_rubrics)
-    elif args.format == "detailed":
-        print_detailed(scored_rubrics, args.min_score, args.max_score)
-    elif args.format == "csv":
-        output_file = results_file.replace('.json', '.csv')
-        export_to_csv(scored_rubrics, output_file)
-    elif args.format == "markdown":
-        output_file = results_file.replace('.json', '.md')
-        export_to_markdown(scored_rubrics, output_file)
+    elif output_format == "detailed":
+        print_detailed(scored_rubrics, min_score, max_score)
+    elif output_format == "csv":
+        export_to_csv(scored_rubrics, results_file.replace(".json", ".csv"))
+    elif output_format == "markdown":
+        export_to_markdown(scored_rubrics, results_file.replace(".json", ".md"))
+
+    return results_file
+
+
+def main():
+    args = parse_args()
+    visualize_results(
+        results_file=args.results_file,
+        repo_name=args.repo_name,
+        reference=args.reference,
+        output_format=args.format,
+        min_score=args.min_score,
+        max_score=args.max_score,
+    )
 
 if __name__ == "__main__":
     main() 

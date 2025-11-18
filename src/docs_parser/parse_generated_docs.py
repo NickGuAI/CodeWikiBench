@@ -1,9 +1,12 @@
-import os
-import json
-import markdown_to_json
-from typing import Any, List, Dict, Optional
-from pydantic import BaseModel
 import argparse
+import json
+import os
+from typing import Any, Dict, List, Optional, Tuple
+
+import markdown_to_json
+from pydantic import BaseModel
+
+SUPPORTED_ADAPTERS = {"deepwiki", "codewiki"}
 
 class DocPage(BaseModel):
     title: Optional[str] = None
@@ -152,7 +155,7 @@ def process_markdown_file(file_path: str, title_index: Dict[str, List[int]]) -> 
     return title, content, sub_indexs
 
 
-def parse_deepwiki(path: str, project_name: str, output_dir: str = None):
+def parse_deepwiki(path: str, project_name: Optional[str] = None, output_dir: Optional[str] = None) -> Tuple[DocPage, Dict[str, Any]]:
     """
     Recursively parse deepwiki documentation from markdown files and generate structured output.
     
@@ -164,6 +167,7 @@ def parse_deepwiki(path: str, project_name: str, output_dir: str = None):
     Returns:
         tuple: (structured_docs, detailed_keys_tree)
     """
+    project_name = project_name or os.path.basename(os.path.abspath(os.path.join(path, os.pardir)))
     if output_dir is None:
         output_dir = path
 
@@ -311,13 +315,44 @@ def parse_deepwiki(path: str, project_name: str, output_dir: str = None):
     
     return root_page, detailed_keys_tree
 
-if __name__ == "__main__":
+
+def parse_docs(adapter: str, repo_name: str, input_dir: str, output_dir: Optional[str] = None):
+    """
+    Dispatch parsing based on adapter name.
+    Currently deepwiki/codewiki share the same parser.
+    """
+    adapter_lower = adapter.lower()
+    if adapter_lower not in SUPPORTED_ADAPTERS:
+        raise ValueError(f"Unsupported adapter '{adapter}'. Supported adapters: {', '.join(sorted(SUPPORTED_ADAPTERS))}.")
+
+    return parse_deepwiki(input_dir, repo_name, output_dir)
+
+
+def _infer_repo_name_from_input(input_dir: str) -> str:
+    """Derive repo name from .../<repo>/<adapter>/docs style paths."""
+    normalized = os.path.abspath(input_dir)
+    parent_dir = os.path.basename(os.path.dirname(normalized))
+    if parent_dir.lower() in SUPPORTED_ADAPTERS:
+        repo_dir = os.path.basename(os.path.dirname(os.path.dirname(normalized)))
+        if repo_dir:
+            return repo_dir
+    return parent_dir or os.path.basename(normalized)
+
+
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input-dir", type=str, required=True)
-    parser.add_argument("--output-dir", type=str)
+    parser.add_argument("--input-dir", type=str, required=True, help="Directory that contains generated markdown files")
+    parser.add_argument("--output-dir", type=str, help="Where parsed docs_tree.json/structured_docs.json should go")
+    parser.add_argument("--adapter", type=str, default="deepwiki", help="Adapter name (default: deepwiki)")
+    parser.add_argument("--repo-name", type=str, help="Repository name (auto-inferred when omitted)")
     args = parser.parse_args()
 
     input_dir = args.input_dir
     output_dir = args.output_dir
-    project_name = input_dir.split("/")[-2]
-    parse_deepwiki(input_dir, project_name, output_dir)
+    repo_name = args.repo_name or _infer_repo_name_from_input(input_dir)
+
+    parse_docs(args.adapter, repo_name, input_dir, output_dir)
+
+
+if __name__ == "__main__":
+    main()

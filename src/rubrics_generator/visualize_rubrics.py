@@ -129,6 +129,9 @@ def get_graph_statistics(graph: nx.DiGraph) -> dict:
 def visualize_rubrics(path: str) -> None:
     with open(path, "r") as f:
         rubrics = json.load(f)
+
+    if isinstance(rubrics, dict) and "rubrics" in rubrics:
+        rubrics = rubrics["rubrics"]
     
     root = Rubric(
         requirements="root rubric",
@@ -152,7 +155,7 @@ if __name__ == "__main__":
     
     with open(args.rubrics_path, "r") as f:
         rubrics = json.load(f)
-        if "rubrics" in rubrics:
+        if isinstance(rubrics, dict) and "rubrics" in rubrics:
             rubrics = rubrics["rubrics"]
     
     root = Rubric(

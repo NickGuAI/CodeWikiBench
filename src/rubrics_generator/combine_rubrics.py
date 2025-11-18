@@ -229,71 +229,64 @@ def calculate_rubrics_statistics(rubrics: List[Dict]) -> Dict:
         "average_weight": statistics.mean(all_weights) if all_weights else 0
     }
 
-async def main():
-    args = parse_args()
-
-    # Save combined results
-    base_path = config.get_data_path(args.repo_name, "rubrics")
-    output_file = args.output_file or "combined_rubrics.json"
+async def combine_rubrics_for_repo(
+    repo_name: str,
+    output_file: str | None = None,
+    temperature: float = 0.1,
+    max_retries: int = 3,
+) -> str | None:
+    """Combine rubric JSON files for a repo and return the output path."""
+    base_path = config.get_data_path(repo_name, "rubrics")
+    output_file = output_file or "combined_rubrics.json"
     output_path = os.path.join(base_path, output_file)
 
-    # check if output file already exists
     if os.path.exists(output_path):
         print(f"Combined rubrics already exists: {output_path}")
-        return
-    
-    # Load all rubrics files
+        return output_path
+
     print("Loading rubrics files...")
-    all_rubrics = load_rubrics_files(args.repo_name)
-    
+    all_rubrics = load_rubrics_files(repo_name)
+
+    if not all_rubrics:
+        print("Error: No rubrics files found")
+        return None
+
     if len(all_rubrics) < 2:
         print("Warning: Only one rubrics file found. Creating a copy as combined rubrics.")
-        if all_rubrics:
-            combined_rubrics = all_rubrics[0]
-        else:
-            print("Error: No rubrics files found")
-            return
+        combined_rubrics = all_rubrics[0]
     else:
         print(f"Combining {len(all_rubrics)} rubrics using semantic analysis...")
-        
-        # Combine rubrics using semantic method
         combined_rubrics = await semantic_combine_rubrics(
-            all_rubrics, 
-            llm_type="anthropic", 
-            model=config.MODEL, 
-            temperature=args.temperature,
-            max_retries=args.max_retries
+            all_rubrics,
+            llm_type="anthropic",
+            model=config.MODEL,
+            temperature=temperature,
+            max_retries=max_retries,
         )
-    
-    # Calculate statistics
+
     stats = calculate_rubrics_statistics(combined_rubrics)
-    
-    # Add metadata about the combination
     combination_metadata = {
         "combination_method": "semantic_llm",
         "llm_model": config.MODEL,
-        "temperature": args.temperature,
+        "temperature": temperature,
         "num_rubrics_combined": len(all_rubrics),
-        "max_retries": args.max_retries,
-        "statistics": stats
+        "max_retries": max_retries,
+        "statistics": stats,
     }
-    
-    # Create the final result structure
     result = {
         "rubrics": combined_rubrics,
-        "combination_metadata": combination_metadata
+        "combination_metadata": combination_metadata,
     }
-    
+
+    os.makedirs(base_path, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(result, f, indent=2)
-    
+
     print(f"Combined rubrics saved to: {output_path}")
-    
-    # Display summary statistics
     print("-" * 100)
     print("COMBINATION SUMMARY:")
     print(f"Method used: Semantic LLM Analysis ({config.MODEL})")
-    print(f"Temperature: {args.temperature}")
+    print(f"Temperature: {temperature}")
     print(f"Number of rubrics combined: {len(all_rubrics)}")
     print(f"Total rubric items: {stats['total_items']}")
     print(f"Top-level items: {stats['top_level_items']}")
@@ -301,6 +294,17 @@ async def main():
     print(f"Weight distribution: {stats['weight_distribution']}")
     print(f"Average weight: {stats['average_weight']:.2f}")
     print("-" * 100)
+    return output_path
+
+
+async def main():
+    args = parse_args()
+    await combine_rubrics_for_repo(
+        repo_name=args.repo_name,
+        output_file=args.output_file,
+        temperature=args.temperature,
+        max_retries=args.max_retries,
+    )
 
 if __name__ == "__main__":
     asyncio.run(main()) 

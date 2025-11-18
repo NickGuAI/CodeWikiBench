@@ -288,7 +288,8 @@ class GitHubRepoProcessor:
         }
 
 
-async def pull_content_and_save(url: str, output_dir: str):
+async def crawl_deepwiki_docs(url: str, output_dir: str):
+    """Fetch docs from DeepWiki MCP endpoint and dump markdown files."""
     client = MCPClient(
         server_url="https://mcp.deepwiki.com/sse",
         timeout=30,
@@ -315,6 +316,12 @@ async def pull_content_and_save(url: str, output_dir: str):
 
     await client.disconnect()
 
+
+def download_deepwiki_docs(url: str, output_dir: str):
+    """Synchronous wrapper used by scripts/CLI."""
+    os.makedirs(output_dir, exist_ok=True)
+    asyncio.run(crawl_deepwiki_docs(url, output_dir))
+
     
 
 
@@ -329,7 +336,5 @@ if __name__ == "__main__":
 
     url = args.url
     output_dir = args.output_dir
-    os.makedirs(output_dir, exist_ok=True)
-
-    asyncio.run(pull_content_and_save(url, output_dir))
+    download_deepwiki_docs(url, output_dir)
     
