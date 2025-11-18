@@ -5,7 +5,7 @@ project:
   default_data_subdir: data
   max_tokens_per_tool_response: 36000
 llm:
-  api_key: sk-1234
-  model: claude-sonnet-4
-  embedding_model: gemini-embedding-001
-  base_url: http://localhost:4000/
+  api_key: ollama
+  model: gpt-oss:20b
+  embedding_model: bge-m3
+  base_url: http://localhost:11434/v1

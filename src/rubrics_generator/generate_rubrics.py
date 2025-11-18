@@ -3,10 +3,16 @@ import asyncio
 import argparse
 import os
 from pathlib import Path
+from typing import Any, Dict, List
 
 from pydantic_ai import Agent
 
-from llm_proxy import get_llm, run_llm_natively
+from llm_proxy import (
+    get_llm,
+    is_gpt_oss_model,
+    run_chat_with_tools,
+    truncate_tokens,
+)
 import config
 from tools import AgentDeps, docs_navigator_tool
 from rubrics_generator.visualize_rubrics import visualize_rubrics
@@ -116,6 +122,12 @@ Use the following JSON format to represent the rubrics:
 - Prioritize accessing documentation files that are **critical for understanding** the system's structure and behavior.
 - Build the rubrics **iteratively**, updating and refining it as more information is gathered.
 </GUIDELINES>
+
+<TOOLS>
+- You have access to a `docs_navigator` tool that retrieves real documentation snippets. Each call accepts a JSON array of navigation paths (e.g., `["subpages", 0, "content", "Overview"]`).
+- **Never** emit placeholders like "TODO" or invent facts. If information is missing, pause and call `docs_navigator` again until you gather the necessary evidence.
+- Cite the sections you inspected in the rubric references to prove coverage.
+</TOOLS>
 """.strip()
 
 SYSTEM_PROMPT_WO_TOOLS = """
@@ -187,6 +199,104 @@ Return the rubrics in the following **nested JSON format**, where:
 - Treat the documentation as evidence from which you infer **the design intent and system structure**.
 """.strip()
 
+# --- GPT-OSS helpers ---
+
+def _docs_navigator_tool_definition() -> List[Dict[str, Any]]:
+    """Return the tool schema exposed to GPT-OSS when running locally."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "docs_navigator",
+                "description": (
+                    "Look up content from structured_docs.json using JSON-style navigation paths. "
+                    "Each path is a list of keys/indices such as ['subpages', 0, 'content', 'Overview']."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "paths": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Collection of navigation paths to inspect.",
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "anyOf": [{"type": "string"}, {"type": "integer"}]
+                                },
+                                "description": "Path describing where to fetch content.",
+                            },
+                        }
+                    },
+                    "required": ["paths"],
+                },
+            },
+        }
+    ]
+
+
+def _format_docs_navigator_output(paths: List[List[Any]], deps: AgentDeps) -> str:
+    """Mirror the existing docs_navigator tool output and keep it token-limited."""
+    chunks: List[str] = []
+    for path in paths:
+        if not isinstance(path, list):
+            raise ValueError("Each entry in 'paths' must be a list that represents the navigation path.")
+        result = deps.docs_navigator.get_content(path)
+        content = json.dumps(result.get("content"), indent=2)
+        chunk = [
+            "--------------------------------",
+            f"Path: {path}",
+            f"Content: \n{content}",
+        ]
+        if result.get("error"):
+            chunk.append(f"Error: {result['error']}")
+        chunk.append("--------------------------------")
+        chunks.append("\n".join(chunk))
+
+    return truncate_tokens("\n".join(chunks))
+
+
+async def _run_gpt_oss_with_tools(
+    *,
+    model: str,
+    prompt: str,
+    system_prompt: str,
+    deps: AgentDeps,
+) -> str:
+    """Execute the cookbook tool loop manually for GPT-OSS models hosted in Ollama."""
+
+    async def handle_tool_call(tool_call: Dict[str, Any]) -> str:
+        function = tool_call.get("function", {})
+        name = function.get("name")
+        if name != "docs_navigator":
+            return f"Unsupported tool '{name}'"
+        arguments_raw = function.get("arguments") or "{}"
+        try:
+            arguments = json.loads(arguments_raw)
+        except json.JSONDecodeError as exc:
+            return f"Invalid JSON passed to docs_navigator: {exc}"
+
+        paths = arguments.get("paths")
+        if not isinstance(paths, list):
+            return "docs_navigator requires a 'paths' array."
+        try:
+            print(f"[docs_navigator] Fetching paths: {paths}")
+            return _format_docs_navigator_output(paths, deps)
+        except ValueError as exc:
+            return str(exc)
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
+
+    return await run_chat_with_tools(
+        model=model,
+        messages=messages,
+        tools=_docs_navigator_tool_definition(),
+        handle_tool_call=handle_tool_call,
+    )
+
 # --- Run ---
 async def run(args):
     # Setup paths automatically from repo name
@@ -201,6 +311,7 @@ async def run(args):
         )
     output_dir = os.path.join(base_path, "rubrics")
     sanitized_model = args.model.replace("/", "_") if args.model else "default"
+    model_name = args.model or config.MODEL
 
     print(f"Using documentation source: {docs_source}")
 
@@ -221,28 +332,37 @@ Given the docs tree:
 \"\"\"
 {json.dumps(docs_tree, indent=2)}
 \"\"\"
+
+Use the docs_navigator tool to inspect any sections you need. Each path must be a JSON array of keys/indices (for example: ["subpages", 0, "content", "Overview"]). Do **not** produce placeholder text; keep calling docs_navigator until you have enough evidence to write complete rubrics that cite specific documentation paths.
 """.strip()
     
     
     # Setup tools and agent
     if args.use_tools:
-        tools = [docs_navigator_tool]
         system_prompt = SYSTEM_PROMPT
     else:
-        tools = []
         system_prompt = SYSTEM_PROMPT_WO_TOOLS
     
-    agent = Agent(
-        model=get_llm(args.model),
-        deps_type=AgentDeps,
-        system_prompt=system_prompt,
-        tools=tools,
-    )
-
     deps = AgentDeps(docs_path)
 
-    final_output = await agent.run(prompt, deps=deps)
-    final_output = final_output.output
+    if args.use_tools and is_gpt_oss_model(model_name):
+        final_output = await _run_gpt_oss_with_tools(
+            model=model_name,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            deps=deps,
+        )
+    else:
+        tools = [docs_navigator_tool] if args.use_tools else []
+        agent = Agent(
+            model=get_llm(model_name),
+            deps_type=AgentDeps,
+            system_prompt=system_prompt,
+            tools=tools,
+        )
+
+        agent_output = await agent.run(prompt, deps=deps)
+        final_output = agent_output.output
     
     # Parse and save rubrics
     try:

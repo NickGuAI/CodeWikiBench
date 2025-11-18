@@ -11,7 +11,26 @@ codebenchmark --help
 By default the CLI writes datasets under `./data` (relative to wherever you run it). Override this by setting
 `CODEWIKIBENCH_DATA_DIR=/absolute/path` or `CODEWIKIBENCH_HOME=/absolute/path` (the latter appends `/data` automatically) before invoking `codebenchmark`.
 For global config (LLM base URL, models, etc.), create `~/.config/codewikibench/config.yaml` or set
-`CODEWIKIBENCH_CONFIG=/path/to/custom.yaml`; those values override the packaged defaults without reinstalling.
+`export CODEWIKIBENCH_CONFIG=/path/to/custom.yaml`; those values override the packaged defaults without reinstalling.
+
+### Run GPT-OSS locally with Ollama
+Follow the [OpenAI Cookbook guide](https://cookbook.openai.com/articles/gpt-oss/run-locally-ollama) to prepare GPT-OSS so `codebenchmark rubrics --model gpt-oss:20b` can navigate docs with tools:
+
+1. [Install Ollama](https://ollama.com) and make sure the daemon is running.
+2. Pull the GPT-OSS checkpoints you plan to use (the 20B build works on ≥16 GB unified memory; the 120B build needs ≥60 GB):
+   ```bash
+   ollama pull gpt-oss:20b
+   # or: ollama pull gpt-oss:120b
+   ```
+3. Point CodeWikiBench at the local Ollama API (the defaults match the cookbook, but you can override them via env vars):
+   ```bash
+   export BASE_URL=${BASE_URL:-http://localhost:11434/v1}
+   export API_KEY=${API_KEY:-ollama}   # Ollama ignores the key but the client requires one
+   ```
+4. Generate rubrics with GPT-OSS while keeping doc-navigation tools enabled:
+   ```bash
+   codebenchmark rubrics --adapter deepwiki --repo electron --model gpt-oss:20b --use-tools
+   ```
 
 ### Local development (uv)
 We still use [uv](https://github.com/astral-sh/uv) for day-to-day development:
