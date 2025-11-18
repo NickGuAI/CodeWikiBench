@@ -1,0 +1,39 @@
+digraph CodeWikiBenchPipeline {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+
+  subgraph cluster_docs {
+    label="Documentation Sources";
+    style=dashed;
+    color=gray;
+    original [label="Official repo docs\n(download_github_folder.sh)", shape=folder];
+    deepwiki [label="DeepWiki crawl\n(crawl_deepwiki_docs.py)", shape=folder];
+    codewiki [label="CodeWiki output", shape=folder];
+  }
+
+  parser [label="Parse to structured_docs.json\n+ docs_tree.json" shape=box];
+  rubrics [label="Generate rubrics per model\n(run_rubrics_pipeline.sh)" shape=box];
+  rubric_store [label="rubrics/<model>.json" shape=folder];
+  rubric_graph [label="visualize_rubrics.py\n(NetworkX graph / Graphviz-friendly)", shape=note];
+  evaluator [label="run_evaluation_pipeline.sh\n(loop models)", shape=box];
+  judge [label="judge/judge.py\nBinary rubric scoring" shape=box];
+  eval_results [label="evaluation_results/<model>.json" shape=folder];
+  combiner [label="combine_evaluations.py\n(avg / vote / weighted / max / min)" shape=box];
+  combined [label="combined_evaluation_results.json" shape=folder];
+  visualize [label="visualize_evaluation.py\n(summary / detailed / CSV / Markdown)" shape=note];
+
+  original -> parser;
+  deepwiki -> parser;
+  codewiki -> parser;
+  parser -> rubrics;
+  rubrics -> rubric_store;
+  rubric_store -> rubric_graph;
+  parser -> evaluator [label="docs_tree" fontcolor=gray40];
+  evaluator -> judge;
+  judge -> eval_results;
+  eval_results -> combiner;
+  combiner -> combined;
+  combined -> visualize;
+  evaluator -> rubrics [style=dashed label="needs rubric" fontcolor=gray40];
+  rubric_store -> judge [style=dashed label="leaf requirements" fontcolor=gray40];
+}
