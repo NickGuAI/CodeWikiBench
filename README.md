@@ -1,30 +1,24 @@
-## Parsing Documentations
-### Official Documemtation
-Pull docs folder from original repository ([example result](examples/OpenHands/original/docs))
-```bash
-bash ./download_github_folder.sh --github_repo_url https://github.com/All-Hands-AI/OpenHands.git --folder_path docs --commit_id <COMMIT_ID>
-```
-Parse official docs ([example result](examples/OpenHands/original))
-```bash
-python docs_parser/parse_official_docs.py --repo_name OpenHands
-```
+## Documentation Inputs
+CodeWikiBench accepts any documentation source that has been parsed into `structured_docs.json` + `docs_tree.json` under `data/<repo>/<folder>/`. Two common flows are DeepWiki crawls and CodeWiki exports.
 
-Crawl deepwiki docs ([example result](examples/OpenHands/deepwiki/docs))
+### DeepWiki
+Crawl DeepWiki docs ([example result](examples/OpenHands/deepwiki/docs))
 ```bash
 python docs_parser/crawl_deepwiki_docs.py --url https://deepwiki.com/AnhMinh-Le/OpenHands --output-dir ../data/OpenHands/deepwiki/docs
 ```
 
-Parse deepwiki docs ([example result](examples/OpenHands/deepwiki))
+Parse the downloaded DeepWiki docs ([example result](examples/OpenHands/deepwiki))
 ```bash
 python docs_parser/parse_generated_docs.py --input-dir ../data/OpenHands/deepwiki/docs --output-dir ../data/OpenHands/deepwiki
 ```
 
-Parse codewiki docs ([example example](examples/OpenHands/codewiki))
+### CodeWiki
+Parse CodeWiki docs ([example result](examples/OpenHands/codewiki))
 ```bash
 python docs_parser/parse_generated_docs.py --input-dir /home/anhnh/CodeWiki/output/docs/All-Hands-AI--OpenHands --output-dir ../data/OpenHands/codewiki
 ```
 
-[NOTE] To evaluate any other types of documentation, you need to parse it into structured_docs.json and its backbone docs_tree.json (see [parsed example](examples/OpenHands/codewiki))
+> Each parsed folder can be named however you like (`deepwiki`, `codewiki`, `team-notes`, ...). Both pipelines auto-detect the first folder that contains `docs_tree.json`, and you can override their choice with `--docs-source <folder>` (rubrics) or `--reference <folder>` (evaluation) whenever needed.
 
 ## Rubrics Generation
 Generate rubrics with multiple models
@@ -41,6 +35,9 @@ Run evaluation with multiple models
 ```bash
 bash ./run_evaluation_pipeline.sh --repo-name OpenHands --reference deepwiki-agent --models kimi-k2-instruct --visualize --batch-size 8
 bash ./run_evaluation_pipeline.sh --repo-name OpenHands --reference deepwiki-agent --models kimi-k2-instruct,gpt-oss-120b,gemini-2.5-flash --visualize --batch-size 4
+
+# Point at a different parsed folder
+bash ./run_evaluation_pipeline.sh --repo-name OpenHands --reference codewiki --models kimi-k2-instruct --batch-size 4
 ```
 
 

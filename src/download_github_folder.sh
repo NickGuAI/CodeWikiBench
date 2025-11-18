@@ -9,7 +9,7 @@ set -e  # Exit on any error
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 --github_repo_url <url> --folder_path <path> [--commit_id <commit>]"
+    echo "Usage: $0 --github_repo_url <url> --folder_path <path> [--target-subdir <folder>] [--commit_id <commit>]"
     echo ""
     echo "Examples:"
     echo "  $0 --github_repo_url https://github.com/infiniflow/ragflow --folder_path docs"
@@ -20,8 +20,7 @@ usage() {
     echo "  --github_repo_url: Full GitHub repository URL (https://github.com/user/repo)"
     echo "  --folder_path:     Path to the folder within the repo (e.g., docs, src/components)"
     echo "  --commit_id:       Optional specific commit ID to download from (SHA hash)"
-    echo ""
-    echo "Target directory will be automatically set to: ../data/{repo_name}/original"
+    echo "  --target-subdir:   Optional docs folder name under data/<repo>/ (default: codewiki)"
     exit 1
 }
 
@@ -29,6 +28,7 @@ usage() {
 REPO_URL=""
 FOLDER_PATH=""
 COMMIT_ID=""
+TARGET_SUBDIR="codewiki"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -43,6 +43,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --commit_id)
             COMMIT_ID="$2"
+            shift 2
+            ;;
+        --target-subdir)
+            TARGET_SUBDIR="$2"
             shift 2
             ;;
         -h|--help)
@@ -70,7 +74,7 @@ fi
 REPO_NAME=$(basename "$REPO_URL" .git)
 
 # Automatically set target directory based on repo name
-TARGET_DIR="../data/$REPO_NAME/original"
+TARGET_DIR="../data/$REPO_NAME/$TARGET_SUBDIR"
 
 echo "🚀 Starting download..."
 echo "Repository: $REPO_URL"

@@ -11,12 +11,32 @@ import config
 from tools import AgentDeps, docs_navigator_tool
 from rubrics_generator.visualize_rubrics import visualize_rubrics
 
+
+def detect_docs_source(base_path: str) -> str:
+    preferred = ["codewiki", "deepwiki", "original"]
+    for candidate in preferred:
+        docs_tree = os.path.join(base_path, candidate, "docs_tree.json")
+        if os.path.isfile(docs_tree):
+            return candidate
+
+    if os.path.isdir(base_path):
+        for name in sorted(os.listdir(base_path)):
+            candidate_path = os.path.join(base_path, name)
+            docs_tree = os.path.join(candidate_path, "docs_tree.json")
+            if os.path.isdir(candidate_path) and os.path.isfile(docs_tree):
+                return name
+
+    raise FileNotFoundError(
+        f"No parsed documentation (docs_tree.json) found under {base_path}. "
+        "Parse docs or provide --docs-source explicitly."
+    )
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate hierarchical rubrics from documentation")
     parser.add_argument("--repo-name", required=True, help="Name of the repository")
     parser.add_argument("--use-tools", action="store_true", help="Enable tools for document navigation")
     parser.add_argument("--model", help="Model to use (default: claude-3-5-haiku-20241022 for anthropic, deepseek-r1-0528 for fireworks, gemini-2.0-flash for google)")
-    parser.add_argument("--docs-source", default="original", help="Name of the parsed docs folder under data/<repo> (default: original)")
+    parser.add_argument("--docs-source", default=None, help="Name of the parsed docs folder under data/<repo> (auto-detected when omitted)")
 
     return parser.parse_args()
 
@@ -171,7 +191,8 @@ Return the rubrics in the following **nested JSON format**, where:
 async def run(args):
     # Setup paths automatically from repo name
     base_path = config.get_data_path(args.repo_name)
-    docs_path = os.path.join(base_path, args.docs_source)
+    docs_source = args.docs_source or detect_docs_source(base_path)
+    docs_path = os.path.join(base_path, docs_source)
     docs_tree_path = os.path.join(docs_path, "docs_tree.json")
     if not os.path.exists(docs_tree_path):
         raise FileNotFoundError(
@@ -180,6 +201,8 @@ async def run(args):
         )
     output_dir = os.path.join(base_path, "rubrics")
     sanitized_model = args.model.replace("/", "_") if args.model else "default"
+
+    print(f"Using documentation source: {docs_source}")
 
     #check if output file already exists
     if os.path.exists(os.path.join(output_dir, f"{sanitized_model}.json")):

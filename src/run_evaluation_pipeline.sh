@@ -18,6 +18,31 @@ NC='\033[0m' # No Color
 # Default configuration
 DEFAULT_REPO_NAME=""
 DEFAULT_REFERENCE=""
+
+detect_reference_folder() {
+    local data_dir="$1"
+    local preferred=("codewiki" "deepwiki" "original")
+
+    for candidate in "${preferred[@]}"; do
+        local candidate_path="$data_dir/$candidate/docs_tree.json"
+        if [[ -f "$candidate_path" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    for entry in "$data_dir"/*; do
+        if [[ -d "$entry" ]]; then
+            local docs_tree_path="$entry/docs_tree.json"
+            if [[ -f "$docs_tree_path" ]]; then
+                echo "$(basename "$entry")"
+                return 0
+            fi
+        fi
+    done
+
+    echo ""
+}
 DEFAULT_MODELS="gpt4.1-mini,kimi-k2-instruct,glm-4p5"  # Default models to use
 DEFAULT_BATCH_SIZE=5
 DEFAULT_COMBINATION_METHOD="average"
@@ -51,7 +76,7 @@ Complete Documentation Evaluation Pipeline
 
 REQUIRED:
   --repo-name NAME           Repository name (required)
-  --reference NAME           Name of the folder that contains the reference documentation needed for evaluation (default: deepwiki)
+  --reference NAME           Name of the folder that contains the reference documentation (auto-detected when omitted)
 
 OPTIONAL:
   --models LIST             Comma-separated list of models (optional, uses defaults)
@@ -176,8 +201,19 @@ if [[ ! -d "$DATA_DIR" ]]; then
     exit 1
 fi
 
+# Auto-detect reference docs folder if not provided
+if [[ -z "$REFERENCE" ]]; then
+    REFERENCE=$(detect_reference_folder "$DATA_DIR")
+    if [[ -z "$REFERENCE" ]]; then
+        print_error "No parsed documentation found under: $DATA_DIR"
+        print_error "Parse docs or provide --reference explicitly"
+        exit 1
+    fi
+    print_status "Auto-detected reference docs: $REFERENCE"
+fi
+
 # Check if docs tree exists
-DOCS_TREE="$DATA_DIR/deepwiki/docs_tree.json"
+DOCS_TREE="$DATA_DIR/$REFERENCE/docs_tree.json"
 if [[ ! -f "$DOCS_TREE" ]]; then
     print_error "Documentation tree not found: $DOCS_TREE"
     print_error "Please run the documentation parsing step first"
@@ -187,6 +223,7 @@ fi
 print_status "Starting evaluation pipeline for repository: $REPO_NAME"
 print_status "Models to use: $MODELS"
 print_status "Data directory: $DATA_DIR"
+print_status "Reference docs folder: $REFERENCE"
 
 # Change to source directory
 # cd $SCRIPT_DIR

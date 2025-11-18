@@ -18,10 +18,30 @@ from tools import AgentDeps, docs_navigator_tool
 from utils import get_llm, run_llm_natively
 import config
 
+
+def detect_docs_source(base_path: str) -> str:
+    preferred = ["codewiki", "deepwiki", "original"]
+    for candidate in preferred:
+        docs_tree = os.path.join(base_path, candidate, "docs_tree.json")
+        if os.path.isfile(docs_tree):
+            return candidate
+
+    if os.path.isdir(base_path):
+        for name in sorted(os.listdir(base_path)):
+            candidate_path = os.path.join(base_path, name)
+            docs_tree = os.path.join(candidate_path, "docs_tree.json")
+            if os.path.isdir(candidate_path) and os.path.isfile(docs_tree):
+                return name
+
+    raise FileNotFoundError(
+        f"No parsed documentation (docs_tree.json) found under {base_path}. "
+        "Parse docs or provide --reference explicitly."
+    )
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate documentation against hierarchical rubrics")
     parser.add_argument("--repo-name", required=True, help="Name of the repository")
-    parser.add_argument("--reference", required=True, help="Name of the folder that contains the reference documentation needed for evaluation")
+    parser.add_argument("--reference", default=None, help="Name of the folder that contains the reference documentation (auto-detected when omitted)")
     parser.add_argument("--use-tools", action="store_true", help="Enable tools for document navigation")
     parser.add_argument("--model", help="Model to use (default: claude-sonnet-4)")
     parser.add_argument("--rubrics-file", help="Path to existing rubrics file for evaluation mode")
@@ -435,7 +455,8 @@ def calculate_scores_bottom_up(rubrics, leaf_evaluations):
 async def run(args):
     # Setup paths automatically from repo name
     base_path = config.get_data_path(args.repo_name)
-    docs_path = os.path.join(base_path, args.reference)
+    docs_source = args.reference or detect_docs_source(base_path)
+    docs_path = os.path.join(base_path, docs_source)
     docs_tree_path = os.path.join(docs_path, "docs_tree.json")
     output_dir = base_path
     
@@ -458,11 +479,12 @@ async def run(args):
         rubrics = json.load(f)
         if "rubrics" in rubrics:
             rubrics = rubrics["rubrics"]
-    
+
     print(f"Loaded rubrics from: {rubrics_file}")
+    print(f"Using documentation source: {docs_source}")
 
     # check if evaluation file already exists
-    evaluation_folder = os.path.join(output_dir, args.reference, "evaluation_results")
+    evaluation_folder = os.path.join(output_dir, docs_source, "evaluation_results")
     if not os.path.exists(evaluation_folder):
         os.makedirs(evaluation_folder)
     # Sanitize model name to avoid path issues with forward slashes
@@ -546,5 +568,3 @@ async def run(args):
 if __name__ == "__main__":
     args = parse_args()
     asyncio.run(run(args))
-
-

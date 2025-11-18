@@ -17,7 +17,6 @@ class RubricReliabilityAssessor:
     def __init__(self, repo_name: str):
         self.repo_name = repo_name
         self.base_path = config.get_data_path(repo_name, "rubrics")
-        self.docs_path = config.get_data_path(repo_name, "original")
         
     async def assess_reliability(self, combined_rubrics_path: str) -> Dict:
         """Main method to assess rubric reliability"""

@@ -21,7 +21,33 @@ DEFAULT_MODELS="claude-sonnet-4,kimi-k2-instruct,glm-4p5"  # Will use default mo
 DEFAULT_USE_TOOLS="true"
 DEFAULT_TEMPERATURE=0.1
 DEFAULT_MAX_RETRIES=3
-DEFAULT_DOCS_SOURCE="original"
+DEFAULT_DOCS_SOURCE=""
+
+# Detect docs folder helper
+detect_docs_source() {
+    local data_dir="$1"
+    local preferred=("codewiki" "deepwiki" "original")
+
+    for candidate in "${preferred[@]}"; do
+        local candidate_path="$data_dir/$candidate/docs_tree.json"
+        if [[ -f "$candidate_path" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    for entry in "$data_dir"/*; do
+        if [[ -d "$entry" ]]; then
+            local docs_tree_path="$entry/docs_tree.json"
+            if [[ -f "$docs_tree_path" ]]; then
+                echo "$(basename "$entry")"
+                return 0
+            fi
+        fi
+    done
+
+    echo ""
+}
 
 # Function to print colored output
 print_status() {
@@ -54,7 +80,7 @@ OPTIONAL:
   --models LIST             Comma-separated list of models (optional, uses defaults)
   --temperature FLOAT       Temperature for LLM inference (default: 0.1)
   --max-retries INT          Maximum number of retries for API calls (default: 3)
-  --docs-source NAME        Name of the parsed docs folder under data/<repo> (default: original)
+  --docs-source NAME        Name of the parsed docs folder under data/<repo> (auto-detected when omitted)
   --skip-generation         Skip rubrics generation step (only combine existing results)
   --skip-combination        Skip combination step
   --no-tools                Disable tools for document navigation
@@ -156,7 +182,18 @@ if [[ ! -d "$DATA_DIR" ]]; then
     exit 1
 fi
 
-# Check if docs tree exists (assuming it's in the 'original' subfolder)
+# Auto-detect docs source if not provided
+if [[ -z "$DOCS_SOURCE" ]]; then
+    DOCS_SOURCE=$(detect_docs_source "$DATA_DIR")
+    if [[ -z "$DOCS_SOURCE" ]]; then
+        print_error "No parsed documentation found under: $DATA_DIR"
+        print_error "Parse docs or provide --docs-source explicitly"
+        exit 1
+    fi
+    print_status "Auto-detected documentation source: $DOCS_SOURCE"
+fi
+
+# Check if docs tree exists for the selected folder
 DOCS_TREE="$DATA_DIR/$DOCS_SOURCE/docs_tree.json"
 if [[ ! -f "$DOCS_TREE" ]]; then
     print_error "Documentation tree not found: $DOCS_TREE"
