@@ -8,6 +8,11 @@ pipx install .             # installs the console script globally
 codebenchmark --help
 ```
 
+By default the CLI writes datasets under `./data` (relative to wherever you run it). Override this by setting
+`CODEWIKIBENCH_DATA_DIR=/absolute/path` or `CODEWIKIBENCH_HOME=/absolute/path` (the latter appends `/data` automatically) before invoking `codebenchmark`.
+For global config (LLM base URL, models, etc.), create `~/.config/codewikibench/config.yaml` or set
+`CODEWIKIBENCH_CONFIG=/path/to/custom.yaml`; those values override the packaged defaults without reinstalling.
+
 ### Local development (uv)
 We still use [uv](https://github.com/astral-sh/uv) for day-to-day development:
 

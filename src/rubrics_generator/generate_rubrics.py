@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic_ai import Agent
 
-from utils import get_llm, run_llm_natively
+from llm_proxy import get_llm, run_llm_natively
 import config
 from tools import AgentDeps, docs_navigator_tool
 from rubrics_generator.visualize_rubrics import visualize_rubrics

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from pydantic_ai import RunContext, Tool
 
-from utils import truncate_tokens
+from llm_proxy import truncate_tokens
 
 
 class DocsNavigator:
@@ -305,7 +305,7 @@ async def test_run_docs_navigator(docs_navigator: DocsNavigator, paths: List[Lis
 
 
 if __name__ == "__main__":
-    from utils import get_llm
+    from llm_proxy import get_llm
     import asyncio
     deps = AgentDeps(docs_path="../data/ragflow/deepwiki-agent")
     result = asyncio.run(test_run_docs_navigator(

@@ -15,7 +15,7 @@ except Exception as e:
 
 from pydantic_ai import Agent
 from tools import AgentDeps, docs_navigator_tool
-from utils import get_llm, run_llm_natively
+from llm_proxy import get_llm, run_llm_natively
 import config
 
 

@@ -6,7 +6,7 @@ from typing import List, Dict
 import statistics
 from collections import Counter
 import config
-from utils import run_llm_natively
+from llm_proxy import run_llm_natively
 from time import sleep
 import asyncio
 

@@ -1,0 +1,11 @@
+project:
+  data_dir_env: CODEWIKIBENCH_DATA_DIR
+  home_env: CODEWIKIBENCH_HOME
+  home_data_subdir: data
+  default_data_subdir: data
+  max_tokens_per_tool_response: 36000
+llm:
+  api_key: sk-1234
+  model: claude-sonnet-4
+  embedding_model: gemini-embedding-001
+  base_url: http://localhost:4000/

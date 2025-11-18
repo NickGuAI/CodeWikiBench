@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from collections import Counter
 
 import config
-from utils import get_embeddings
+from llm_proxy import get_embeddings
 
 
 class RubricReliabilityAssessor:
